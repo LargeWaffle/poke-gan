@@ -93,6 +93,42 @@ class Generator(nn.Module):
         return self.main(model_input)
 
 
+class UpsampledGenerator(nn.Module):
+    def __init__(self, ngpu):
+        super(UpsampledGenerator, self).__init__()
+        self.ngpu = ngpu
+        self.main = nn.Sequential(
+            # input is Z, going into a convolution
+            nn.Upsample(scale_factor=4, mode='bicubic', align_corners=True),
+            nn.Conv2d(nz, ngf * 8, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(ngf * 8),
+            nn.ReLU(True),
+            # state size. (ngf*8) x 4 x 4
+            nn.Upsample(scale_factor=2, mode='bicubic', align_corners=True),
+            nn.Conv2d(ngf * 8, ngf * 4, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(ngf * 4),
+            nn.ReLU(True),
+            # state size. (ngf*4) x 8 x 8
+            nn.Upsample(scale_factor=2, mode='bicubic', align_corners=True),
+            nn.Conv2d(ngf * 4, ngf * 2, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(ngf * 2),
+            nn.ReLU(True),
+            # state size. (ngf*2) x 16 x 16
+            nn.Upsample(scale_factor=2, mode='bicubic', align_corners=True),
+            nn.Conv2d(ngf * 2, ngf, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(ngf),
+            nn.ReLU(True),
+            # state size. (ngf) x 32 x 32
+            nn.Upsample(scale_factor=2, mode='bicubic', align_corners=True),
+            nn.Conv2d(ngf, nc, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.Tanh()
+            # state size. (nc) x 64 x 64
+        )
+
+    def forward(self, model_input):
+        return self.main(model_input)
+
+
 ######################################################################
 # Discriminator
 # ~~~~~~~~~~~~~
@@ -151,9 +187,13 @@ def multi_gpu(network, device, nb_gpu):
     return n
 
 
-def get_generator(device, nb_gpu):
+def get_generator(device, nb_gpu, upsampled=True):
     # Create the generator
-    generator_network = Generator(nb_gpu).to(device)
+    if upsampled:
+        generator_network = UpsampledGenerator(nb_gpu).to(device)
+    else:
+        generator_network = Generator(nb_gpu).to(device)
+
     generator_network = multi_gpu(generator_network, device, nb_gpu)
 
     # Apply the weights_init function to randomly initialize all weights
@@ -204,6 +244,9 @@ def train(dataloader, discriminator_network, optimizer_d, generator_network, opt
     g_losses = []
     d_losses = []
     iters = 0
+
+    len_ds = len(dataloader)
+    status_step = len_ds // 2
 
     print("Starting Training Loop...")
     # For each epoch
@@ -262,7 +305,7 @@ def train(dataloader, discriminator_network, optimizer_d, generator_network, opt
             optimizer_g.step()
 
             # Output training stats
-            if i % 50 == 0:
+            if i % status_step == 0:
                 print('[%d/%d][%d/%d]\tLoss_D: %.4f\tLoss_G: %.4f\tD(x): %.4f\tD(G(z)): %.4f / %.4f'
                       % (epoch, num_epochs, i, len(dataloader),
                          err_d.item(), err_g.item(), d_x, d_g_z1, d_g_z2))
@@ -272,7 +315,7 @@ def train(dataloader, discriminator_network, optimizer_d, generator_network, opt
             d_losses.append(err_d.item())
 
             # Check how the generator is doing by saving G's output on fixed_noise
-            if (iters % 500 == 0) or ((epoch == num_epochs - 1) and (i == len(dataloader) - 1)):
+            if (iters % 500 == 0) or ((epoch == num_epochs - 1) and (i == len_ds - 1)):
                 with torch.no_grad():
                     fake = generator_network(fixed_noise).detach().cpu()
                 imgs.append(vutils.make_grid(fake, padding=2, normalize=True))

@@ -11,7 +11,7 @@ def custom_loader(path):
     return img
 
 
-def prepare_data(dataroot, image_size, batch_size, workers):
+def prepare_data(dataroot, image_size, batch_size, workers, augmentation=False):
     # Create the datasets
 
     transformations = transforms.Compose([
@@ -21,25 +21,29 @@ def prepare_data(dataroot, image_size, batch_size, workers):
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
     ])
 
-    vanilla = dset.ImageFolder(root=dataroot, transform=transformations, loader=custom_loader)
+    data = dset.ImageFolder(root=dataroot, transform=transformations, loader=custom_loader)
 
-    transformations = transforms.Compose([
-        transforms.Resize(image_size),
-        transforms.CenterCrop(image_size),
-        transforms.RandomHorizontalFlip(p=1.0),
-        transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-    ])
+    if augmentation:
+        transformations = transforms.Compose([
+            transforms.Resize(image_size),
+            transforms.CenterCrop(image_size),
+            transforms.RandomHorizontalFlip(p=1.0),
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+        ])
 
-    augmented = dset.ImageFolder(root=dataroot, transform=transformations, loader=custom_loader)
+        augmented = dset.ImageFolder(root=dataroot, transform=transformations, loader=custom_loader)
 
-    datasets = torch.utils.data.ConcatDataset([vanilla, augmented])
+        data = torch.utils.data.ConcatDataset([data, augmented])
 
     # Create the dataloader
-    dataloader = torch.utils.data.DataLoader(datasets, batch_size=batch_size,
+    dataloader = torch.utils.data.DataLoader(data, batch_size=batch_size,
                                              shuffle=True, num_workers=workers)
 
     # noinspection PyTypeChecker
     print("Dataset length", len(dataloader.dataset))
+    len_ds = len(dataloader)
+    status_step = len_ds // 2
 
+    print("len ", len_ds, "stat", status_step)
     return dataloader

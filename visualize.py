@@ -31,7 +31,7 @@ def save_gif(img_list):
     ims = [[plt.imshow(np.transpose(i, (1, 2, 0)), animated=True)] for i in img_list]
     ani = animation.ArtistAnimation(fig, ims, interval=2000, repeat_delay=1000, blit=True)
 
-    ani.save('pokegan.gif', writer="pillow", fps=12)
+    ani.save('pokegan.gif', writer="pillow", fps=10)
 
 
 def side_by_side(dataset, device, img_list):
