@@ -1,10 +1,19 @@
+import torch
 import torch.nn as nn
+import torch.optim as optim
+import torch.nn.parallel
+import torchvision.utils as vutils
+
+# Beta1 hyperparam for Adam optimizers
+beta1 = 0.5
+
+lr = 0.0002
 
 # Number of channels in the training images. For color images this is 3
 nc = 3
 
 # Size of z latent vector (i.e. size of generator input)
-nz = 100
+nz = 128
 
 # Size of feature maps in generator
 ngf = 64
@@ -80,8 +89,8 @@ class Generator(nn.Module):
             # state size. (nc) x 64 x 64
         )
 
-    def forward(self, input):
-        return self.main(input)
+    def forward(self, model_input):
+        return self.main(model_input)
 
 
 ######################################################################
@@ -129,5 +138,145 @@ class Discriminator(nn.Module):
             nn.Sigmoid()
         )
 
-    def forward(self, input):
-        return self.main(input)
+    def forward(self, model_input):
+        return self.main(model_input)
+
+
+def multi_gpu(network, device, nb_gpu):
+    n = network
+    # Handle multi-gpu if desired
+    if (device.type == 'cuda') and (nb_gpu > 1):
+        n = nn.DataParallel(network, list(range(nb_gpu)))
+
+    return n
+
+
+def get_generator(device, nb_gpu):
+    # Create the generator
+    generator_network = Generator(nb_gpu).to(device)
+    generator_network = multi_gpu(generator_network, device, nb_gpu)
+
+    # Apply the weights_init function to randomly initialize all weights
+    #  to mean=0, stdev=0.02.
+    generator_network.apply(weights_init)
+
+    # Print the model
+    print(generator_network)
+
+    optimizer_g = optim.Adam(generator_network.parameters(), lr=lr, betas=(beta1, 0.999))
+
+    return generator_network, optimizer_g
+
+
+def get_discriminator(device, nb_gpu):
+    # Create the Discriminator
+    discriminator_network = Discriminator(nb_gpu).to(device)
+    discriminator_network = multi_gpu(discriminator_network, device, nb_gpu)
+
+    # Apply the weights_init function to randomly initialize all weights
+    #  to mean=0, stdev=0.2.
+    discriminator_network.apply(weights_init)
+
+    # Print the model
+    print(discriminator_network)
+
+    optimizer_d = optim.Adam(discriminator_network.parameters(), lr=lr, betas=(beta1, 0.999))
+
+    return discriminator_network, optimizer_d
+
+
+def train(dataloader, discriminator_network, optimizer_d, generator_network, optimizer_g, device, *, num_epochs=100):
+    # Training Loop
+
+    # Initialize BCELoss function
+    criterion = nn.BCELoss()
+
+    # Create batch of latent vectors that we will use to visualize
+    #  the progression of the generator
+    fixed_noise = torch.randn(64, nz, 1, 1, device=device)
+
+    # Establish convention for real and fake labels during training
+    real_label = 1.
+    fake_label = 0.
+
+    # Lists to keep track of progress
+    imgs = []
+    g_losses = []
+    d_losses = []
+    iters = 0
+
+    print("Starting Training Loop...")
+    # For each epoch
+    for epoch in range(num_epochs):
+        print("Epoch:", epoch)
+        # For each batch in the dataloader
+        for i, data in enumerate(dataloader, 0):
+            ############################
+            # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
+            ###########################
+            # Train with all-real batch
+            discriminator_network.zero_grad()
+            # Format batch
+            real_cpu = data[0].to(device)
+            b_size = real_cpu.size(0)
+            label = torch.full((b_size,), real_label, dtype=torch.float, device=device)
+            # Forward pass real batch through D
+            output = discriminator_network(real_cpu).view(-1)
+            # Calculate loss on all-real batch
+            err_d_real = criterion(output, label)
+            # Calculate gradients for D in backward pass
+            err_d_real.backward()
+            d_x = output.mean().item()
+
+            # Train with all-fake batch
+            # Generate batch of latent vectors
+            noise = torch.randn(b_size, nz, 1, 1, device=device)
+            # Generate fake image batch with G
+            fake = generator_network(noise)
+            label.fill_(fake_label)
+            # Classify all fake batch with D
+            output = discriminator_network(fake.detach()).view(-1)
+            # Calculate D's loss on the all-fake batch
+            err_d_fake = criterion(output, label)
+            # Calculate the gradients for this batch, accumulated (summed) with previous gradients
+            err_d_fake.backward()
+            d_g_z1 = output.mean().item()
+            # Compute error of D as sum over the fake and the real batches
+            err_d = err_d_real + err_d_fake
+            # Update D
+            optimizer_d.step()
+
+            ############################
+            # (2) Update G network: maximize log(D(G(z)))
+            ###########################
+            generator_network.zero_grad()
+            label.fill_(real_label)  # fake labels are real for generator cost
+            # Since we just updated D, perform another forward pass of all-fake batch through D
+            output = discriminator_network(fake).view(-1)
+            # Calculate G's loss based on this output
+            err_g = criterion(output, label)
+            # Calculate gradients for G
+            err_g.backward()
+            d_g_z2 = output.mean().item()
+            # Update G
+            optimizer_g.step()
+
+            # Output training stats
+            if i % 50 == 0:
+                print('[%d/%d][%d/%d]\tLoss_D: %.4f\tLoss_G: %.4f\tD(x): %.4f\tD(G(z)): %.4f / %.4f'
+                      % (epoch, num_epochs, i, len(dataloader),
+                         err_d.item(), err_g.item(), d_x, d_g_z1, d_g_z2))
+
+            # Save Losses for plotting later
+            g_losses.append(err_g.item())
+            d_losses.append(err_d.item())
+
+            # Check how the generator is doing by saving G's output on fixed_noise
+            if (iters % 500 == 0) or ((epoch == num_epochs - 1) and (i == len(dataloader) - 1)):
+                with torch.no_grad():
+                    fake = generator_network(fixed_noise).detach().cpu()
+                imgs.append(vutils.make_grid(fake, padding=2, normalize=True))
+
+            iters += 1
+
+    return imgs, d_losses, g_losses
