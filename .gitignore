@@ -152,3 +152,5 @@ cython_debug/
 .idea/
 models
 data
+other_files/
+*.gif
