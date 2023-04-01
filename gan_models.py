@@ -307,7 +307,7 @@ def train(dataloader, discriminator_network, optimizer_d, generator_network, opt
             # Output training stats
             if i % status_step == 0:
                 print('[%d/%d][%d/%d]\tLoss_D: %.4f\tLoss_G: %.4f\tD(x): %.4f\tD(G(z)): %.4f / %.4f'
-                      % (epoch, num_epochs, i, len(dataloader),
+                      % (epoch, num_epochs, i, len_ds,
                          err_d.item(), err_g.item(), d_x, d_g_z1, d_g_z2))
 
             # Save Losses for plotting later
