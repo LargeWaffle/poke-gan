@@ -5,12 +5,6 @@ import torchvision.transforms as transforms
 from torchvision.io import read_image, ImageReadMode
 
 
-def custom_loader(path):
-    img = read_image(path, mode=ImageReadMode.RGB)
-    img = transforms.ToPILImage()(img.squeeze(0))
-    return img
-
-
 def prepare_data(dataroot, image_size, batch_size, workers, augmentation=False):
     # Create the datasets
 
@@ -21,7 +15,7 @@ def prepare_data(dataroot, image_size, batch_size, workers, augmentation=False):
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
     ])
 
-    data = dset.ImageFolder(root=dataroot, transform=transformations, loader=custom_loader)
+    data = dset.ImageFolder(root=dataroot, transform=transformations)
 
     if augmentation:
         transformations = transforms.Compose([
@@ -32,7 +26,7 @@ def prepare_data(dataroot, image_size, batch_size, workers, augmentation=False):
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
         ])
 
-        augmented = dset.ImageFolder(root=dataroot, transform=transformations, loader=custom_loader)
+        augmented = dset.ImageFolder(root=dataroot, transform=transformations)
 
         data = torch.utils.data.ConcatDataset([data, augmented])
 

@@ -11,9 +11,5 @@ for filename in os.listdir(directory):
         rgb_im.save(directory + name)
         os.remove(directory + filename)
         c += 1
-        print(os.path.join(directory, filename))
-        continue
-    else:
-        continue
 
 print(c)
