@@ -39,5 +39,5 @@ def prepare_data(dataroot, image_size, batch_size, workers, augmentation=False):
     len_ds = len(dataloader)
     status_step = len_ds // 2
 
-    print("len ", len_ds, "stat", status_step)
+    print("len", len_ds, "stat", status_step)
     return dataloader

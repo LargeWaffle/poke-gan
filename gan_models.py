@@ -187,7 +187,7 @@ def multi_gpu(network, device, nb_gpu):
     return n
 
 
-def get_generator(device, nb_gpu, upsampled=True):
+def get_generator(device, nb_gpu, upsampled=False):
     # Create the generator
     if upsampled:
         generator_network = UpsampledGenerator(nb_gpu).to(device)
@@ -196,8 +196,7 @@ def get_generator(device, nb_gpu, upsampled=True):
 
     generator_network = multi_gpu(generator_network, device, nb_gpu)
 
-    # Apply the weights_init function to randomly initialize all weights
-    #  to mean=0, stdev=0.02.
+    # Apply the weights_init function to randomly initialize all weights to mean=0, stdev=0.02.
     generator_network.apply(weights_init)
 
     # Print the model
@@ -213,8 +212,7 @@ def get_discriminator(device, nb_gpu):
     discriminator_network = Discriminator(nb_gpu).to(device)
     discriminator_network = multi_gpu(discriminator_network, device, nb_gpu)
 
-    # Apply the weights_init function to randomly initialize all weights
-    #  to mean=0, stdev=0.2.
+    # Apply the weights_init function to randomly initialize all weights to mean=0, stdev=0.2.
     discriminator_network.apply(weights_init)
 
     # Print the model

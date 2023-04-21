@@ -9,7 +9,7 @@ def imshow(img):
     cv2.destroyAllWindows()
 
 
-def manual_kmeans(img):
+def kmeans(img):
     img_convert = img.reshape((-1, 3))
     img_convert = np.float32(img_convert)
 

@@ -38,7 +38,7 @@ if __name__ == '__main__':
     device = torch.device("cuda:0" if (torch.cuda.is_available() and nb_gpu > 0) else "cpu")
     print("Running on", device)
 
-    dataset = prepare_data(dataroot="data/all_poke/", image_size=64, batch_size=32, workers=2, augmentation=True)
+    dataset = prepare_data(dataroot="data/", image_size=64, batch_size=32, workers=2, augmentation=True)
     plot_images(dataset, device)
 
     discriminator, optiD = get_discriminator(device, nb_gpu)
